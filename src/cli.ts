@@ -1,16 +1,16 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
-const crypto = require("node:crypto");
-const { execSync, spawn } = require("node:child_process");
-const fs = require("node:fs");
-const os = require("node:os");
-const path = require("node:path");
+import crypto from "node:crypto";
+import { execSync, spawn } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
-function base64url(data) {
+function base64url(data: string): string {
   return Buffer.from(data).toString("base64url");
 }
 
-function createJWT(appId, privateKey) {
+function createJWT(appId: string, privateKey: string): string {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "RS256", typ: "JWT" };
   const payload = {
@@ -31,7 +31,18 @@ function createJWT(appId, privateKey) {
   return `${signingInput}.${signature}`;
 }
 
-async function getInstallationToken(jwt) {
+interface GitHubInstallation {
+  id: number;
+  account: {
+    login: string;
+  } | null;
+}
+
+interface GitHubAccessToken {
+  token: string;
+}
+
+async function getInstallationToken(jwt: string): Promise<string> {
   const installationsRes = await fetch(
     "https://api.github.com/app/installations",
     {
@@ -48,7 +59,7 @@ async function getInstallationToken(jwt) {
     );
   }
 
-  const installations = await installationsRes.json();
+  const installations: GitHubInstallation[] = await installationsRes.json();
   const installation = installations.find(
     (i) => i.account && i.account.login === "vellum-ai"
   );
@@ -79,11 +90,11 @@ async function getInstallationToken(jwt) {
     );
   }
 
-  const tokenData = await tokenRes.json();
+  const tokenData: GitHubAccessToken = await tokenRes.json();
   return tokenData.token;
 }
 
-async function hatch() {
+async function hatch(): Promise<void> {
   const appId = process.env.GITHUB_APP_ID;
   const privateKey = process.env.GITHUB_PRIVATE_KEY;
 
@@ -129,7 +140,7 @@ async function hatch() {
       stdio: "inherit",
     });
 
-    const forward = (signal) => {
+    const forward = (signal: NodeJS.Signals) => {
       child.kill(signal);
     };
     process.on("SIGINT", () => forward("SIGINT"));
@@ -141,7 +152,7 @@ async function hatch() {
     });
   } catch (err) {
     fs.rmSync(tmpDir, { recursive: true, force: true });
-    console.error(`Error: ${err.message}`);
+    console.error(`Error: ${(err as Error).message}`);
     process.exit(1);
   }
 }
