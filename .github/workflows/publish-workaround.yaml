@@ -1,8 +1,6 @@
 name: Publish to npm (workaround)
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
 
 permissions:
