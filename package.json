@@ -2,10 +2,15 @@
   "name": "velly",
   "version": "0.0.2",
   "description": "",
-  "main": "src/cli.ts",
+  "main": "dist/cli.js",
   "bin": {
-    "velly": "./src/cli.ts"
+    "velly": "dist/cli.js"
   },
-  "scripts": {},
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "bun build src/cli.ts --outfile dist/cli.js --target bun"
+  },
   "license": "GPL-3.0"
 }
