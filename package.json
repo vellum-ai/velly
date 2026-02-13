@@ -3,6 +3,12 @@
   "version": "0.0.1",
   "description": "",
   "main": "index.js",
+  "bin": {
+    "velly": "./index.js"
+  },
   "scripts": {},
+  "engines": {
+    "node": ">=18"
+  },
   "license": "ISC"
 }
