@@ -1,11 +1,11 @@
 {
   "name": "velly",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "",
   "main": "src/cli.ts",
   "bin": {
     "velly": "./src/cli.ts"
   },
   "scripts": {},
-  "license": "ISC"
+  "license": "GPL-3.0"
 }
