@@ -2,7 +2,10 @@
   "name": "velly",
   "version": "0.0.1",
   "description": "",
-  "main": "index.js",
+  "main": "src/cli.ts",
+  "bin": {
+    "velly": "./src/cli.ts"
+  },
   "scripts": {},
   "license": "ISC"
 }
