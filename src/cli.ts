@@ -134,8 +134,8 @@ async function hatch(): Promise<void> {
     console.log("Installing dependencies...");
     execSync("bun install", { cwd: assistantDir, stdio: "inherit" });
 
-    console.log("Starting assistant...");
-    const child = spawn("bun", ["run", "src/index.ts"], {
+    console.log("Starting assistant daemon...");
+    const child = spawn("bun", ["run", "src/index.ts", "daemon", "start"], {
       cwd: assistantDir,
       stdio: "inherit",
     });
