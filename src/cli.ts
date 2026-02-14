@@ -36,14 +36,40 @@ async function fetchLatestRelease(): Promise<GitHubRelease> {
   return res.json();
 }
 
-async function downloadAsset(url: string, destPath: string): Promise<void> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Failed to download artifact: ${res.status}`);
-  }
+const RETRYABLE_STATUS_CODES = new Set([502, 503, 504]);
+const MAX_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 2_000;
 
-  const buffer = await res.arrayBuffer();
-  fs.writeFileSync(destPath, Buffer.from(buffer));
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function downloadAsset(
+  url: string,
+  destPath: string,
+  name: string
+): Promise<void> {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch(url);
+    if (res.ok) {
+      const buffer = await res.arrayBuffer();
+      fs.writeFileSync(destPath, Buffer.from(buffer));
+      return;
+    }
+
+    if (RETRYABLE_STATUS_CODES.has(res.status) && attempt < MAX_RETRIES) {
+      const delay = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+      console.warn(
+        `Failed to download ${name} (HTTP ${res.status}), retrying in ${delay / 1_000}s (attempt ${attempt}/${MAX_RETRIES})...`
+      );
+      await sleep(delay);
+      continue;
+    }
+
+    throw new Error(
+      `Failed to download ${name}: HTTP ${res.status}`
+    );
+  }
 }
 
 function findAssetOrThrow(
@@ -67,7 +93,7 @@ async function extractAsset(
   const zipPath = path.join(tmpDir, `${name}.zip`);
   const destDir = path.join(tmpDir, name);
 
-  await downloadAsset(url, zipPath);
+  await downloadAsset(url, zipPath, name);
 
   console.log(`Extracting ${name}...`);
   fs.mkdirSync(destDir, { recursive: true });
