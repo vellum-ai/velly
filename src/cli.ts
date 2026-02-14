@@ -46,56 +46,92 @@ async function downloadAsset(url: string, destPath: string): Promise<void> {
   fs.writeFileSync(destPath, Buffer.from(buffer));
 }
 
+function findAssetOrThrow(
+  release: GitHubRelease,
+  prefix: string
+): GitHubAsset {
+  const asset = release.assets.find((a) => a.name.startsWith(prefix));
+  if (!asset) {
+    throw new Error(
+      `No ${prefix} artifact found in release ${release.tag_name}`
+    );
+  }
+  return asset;
+}
+
+async function extractAsset(
+  url: string,
+  tmpDir: string,
+  name: string
+): Promise<string> {
+  const zipPath = path.join(tmpDir, `${name}.zip`);
+  const destDir = path.join(tmpDir, name);
+
+  await downloadAsset(url, zipPath);
+
+  console.log(`Extracting ${name}...`);
+  fs.mkdirSync(destDir, { recursive: true });
+  execSync(`unzip -q "${zipPath}" -d "${destDir}"`, { stdio: "inherit" });
+  fs.rmSync(zipPath);
+
+  console.log(`Installing ${name} dependencies...`);
+  execSync("bun install", { cwd: destDir, stdio: "inherit" });
+
+  return destDir;
+}
+
 async function hatch(): Promise<void> {
   console.log("Fetching latest release...");
   const release = await fetchLatestRelease();
 
-  const assistantAsset = release.assets.find((a) =>
-    a.name.startsWith("assistant")
-  );
-
-  if (!assistantAsset) {
-    throw new Error(
-      `No assistant artifact found in release ${release.tag_name}`
-    );
-  }
+  const assistantAsset = findAssetOrThrow(release, "assistant");
+  const gatewayAsset = findAssetOrThrow(release, "gateway");
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "velly-"));
-  const zipPath = path.join(tmpDir, assistantAsset.name);
-  const assistantDir = path.join(tmpDir, "assistant");
 
   try {
-    console.log(
-      `Downloading ${assistantAsset.name} from ${release.tag_name}...`
-    );
-    await downloadAsset(assistantAsset.browser_download_url, zipPath);
-
-    console.log("Extracting assistant...");
-    fs.mkdirSync(assistantDir, { recursive: true });
-    execSync(`unzip -q "${zipPath}" -d "${assistantDir}"`, {
-      stdio: "inherit",
-    });
-    fs.rmSync(zipPath);
-
-    console.log("Installing dependencies...");
-    execSync("bun install", { cwd: assistantDir, stdio: "inherit" });
+    console.log(`Downloading assets from ${release.tag_name}...`);
+    const [assistantDir, gatewayDir] = await Promise.all([
+      extractAsset(
+        assistantAsset.browser_download_url,
+        tmpDir,
+        "assistant"
+      ),
+      extractAsset(gatewayAsset.browser_download_url, tmpDir, "gateway"),
+    ]);
 
     console.log("Starting assistant daemon...");
-    const child = spawn("bun", ["run", "src/index.ts", "daemon", "start"], {
-      cwd: assistantDir,
+    const daemonChild = spawn(
+      "bun",
+      ["run", "src/index.ts", "daemon", "start"],
+      { cwd: assistantDir, stdio: "inherit" }
+    );
+
+    console.log("Starting gateway...");
+    const gatewayChild = spawn("bun", ["run", "src/index.ts"], {
+      cwd: gatewayDir,
       stdio: "inherit",
     });
 
+    const children = [daemonChild, gatewayChild];
+
     const forward = (signal: NodeJS.Signals) => {
-      child.kill(signal);
+      for (const child of children) child.kill(signal);
     };
     process.on("SIGINT", () => forward("SIGINT"));
     process.on("SIGTERM", () => forward("SIGTERM"));
 
-    child.on("exit", (code) => {
+    let exited = false;
+    const onExit = (code: number | null) => {
+      if (exited) return;
+      exited = true;
+      for (const child of children) child.kill();
       fs.rmSync(tmpDir, { recursive: true, force: true });
       process.exit(code ?? 0);
-    });
+    };
+
+    daemonChild.on("exit", onExit);
+    gatewayChild.on("exit", onExit);
   } catch (err) {
     fs.rmSync(tmpDir, { recursive: true, force: true });
     throw err;
