@@ -50,8 +50,8 @@ async function hatch(): Promise<void> {
   console.log("Fetching latest release...");
   const release = await fetchLatestRelease();
 
-  const assistantAsset = release.assets.find((a) =>
-    a.name.startsWith("assistant")
+  const assistantAsset = release.assets.find(
+    (a) => a.name === "vellum-assistant.zip" || a.name === "assistant.zip"
   );
 
   if (!assistantAsset) {
