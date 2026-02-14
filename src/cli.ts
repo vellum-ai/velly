@@ -1,135 +1,81 @@
 #!/usr/bin/env bun
 
-import crypto from "node:crypto";
 import { execSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-function base64url(data: string): string {
-  return Buffer.from(data).toString("base64url");
+const REPO = "vellum-ai/velly";
+
+interface GitHubAsset {
+  name: string;
+  browser_download_url: string;
 }
 
-function createJWT(appId: string, privateKey: string): string {
-  const now = Math.floor(Date.now() / 1000);
-  const header = { alg: "RS256", typ: "JWT" };
-  const payload = {
-    iat: now - 60,
-    exp: now + 10 * 60,
-    iss: appId,
-  };
-
-  const encodedHeader = base64url(JSON.stringify(header));
-  const encodedPayload = base64url(JSON.stringify(payload));
-  const signingInput = `${encodedHeader}.${encodedPayload}`;
-
-  const signature = crypto
-    .createSign("RSA-SHA256")
-    .update(signingInput)
-    .sign(privateKey, "base64url");
-
-  return `${signingInput}.${signature}`;
+interface GitHubRelease {
+  tag_name: string;
+  assets: GitHubAsset[];
 }
 
-interface GitHubInstallation {
-  id: number;
-  account: {
-    login: string;
-  } | null;
-}
-
-interface GitHubAccessToken {
-  token: string;
-}
-
-async function getInstallationToken(jwt: string): Promise<string> {
-  const installationsRes = await fetch(
-    "https://api.github.com/app/installations",
+async function fetchLatestRelease(): Promise<GitHubRelease> {
+  const res = await fetch(
+    `https://api.github.com/repos/${REPO}/releases/latest`,
     {
       headers: {
-        Authorization: `Bearer ${jwt}`,
         Accept: "application/vnd.github+json",
       },
     }
   );
 
-  if (!installationsRes.ok) {
+  if (!res.ok) {
     throw new Error(
-      `Failed to list installations: ${installationsRes.status} ${await installationsRes.text()}`
+      `Failed to fetch latest release: ${res.status} ${await res.text()}`
     );
   }
 
-  const installations: GitHubInstallation[] = await installationsRes.json();
-  const installation = installations.find(
-    (i) => i.account && i.account.login === "vellum-ai"
-  );
+  return res.json();
+}
 
-  if (!installation) {
-    throw new Error(
-      'No GitHub App installation found for the "vellum-ai" organization'
-    );
+async function downloadAsset(url: string, destPath: string): Promise<void> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to download artifact: ${res.status}`);
   }
 
-  const tokenRes = await fetch(
-    `https://api.github.com/app/installations/${installation.id}/access_tokens`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${jwt}`,
-        Accept: "application/vnd.github+json",
-      },
-      body: JSON.stringify({
-        repositories: ["vellum-assistant"],
-      }),
-    }
-  );
-
-  if (!tokenRes.ok) {
-    throw new Error(
-      `Failed to create installation token: ${tokenRes.status} ${await tokenRes.text()}`
-    );
-  }
-
-  const tokenData: GitHubAccessToken = await tokenRes.json();
-  return tokenData.token;
+  const buffer = await res.arrayBuffer();
+  fs.writeFileSync(destPath, Buffer.from(buffer));
 }
 
 async function hatch(): Promise<void> {
-  const appId = process.env.GITHUB_APP_ID;
-  const privateKey = process.env.GITHUB_PRIVATE_KEY;
+  console.log("Fetching latest release...");
+  const release = await fetchLatestRelease();
 
-  if (!appId) {
-    console.error("Error: GITHUB_APP_ID environment variable is required");
-    process.exit(1);
-  }
+  const assistantAsset = release.assets.find((a) =>
+    a.name.startsWith("assistant")
+  );
 
-  if (!privateKey) {
-    console.error(
-      "Error: GITHUB_PRIVATE_KEY environment variable is required"
+  if (!assistantAsset) {
+    throw new Error(
+      `No assistant artifact found in release ${release.tag_name}`
     );
-    process.exit(1);
   }
-
-  console.log("Generating GitHub App token...");
-  const jwt = createJWT(appId, privateKey);
-  const token = await getInstallationToken(jwt);
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "velly-"));
-  const cloneDir = path.join(tmpDir, "vellum-assistant");
+  const zipPath = path.join(tmpDir, assistantAsset.name);
   const assistantDir = path.join(tmpDir, "assistant");
 
   try {
-    console.log("Cloning vellum-assistant...");
-    execSync(
-      `git clone --depth 1 https://x-access-token:${token}@github.com/vellum-ai/vellum-assistant.git ${cloneDir}`,
-      { stdio: "inherit" }
+    console.log(
+      `Downloading ${assistantAsset.name} from ${release.tag_name}...`
     );
+    await downloadAsset(assistantAsset.browser_download_url, zipPath);
 
-    console.log("Extracting assistant directory...");
-    fs.cpSync(path.join(cloneDir, "assistant"), assistantDir, {
-      recursive: true,
+    console.log("Extracting assistant...");
+    fs.mkdirSync(assistantDir, { recursive: true });
+    execSync(`unzip -q "${zipPath}" -d "${assistantDir}"`, {
+      stdio: "inherit",
     });
-    fs.rmSync(cloneDir, { recursive: true, force: true });
+    fs.rmSync(zipPath);
 
     console.log("Installing dependencies...");
     execSync("bun install", { cwd: assistantDir, stdio: "inherit" });
@@ -152,15 +98,17 @@ async function hatch(): Promise<void> {
     });
   } catch (err) {
     fs.rmSync(tmpDir, { recursive: true, force: true });
-    console.error(`Error: ${(err as Error).message}`);
-    process.exit(1);
+    throw err;
   }
 }
 
 const command = process.argv[2];
 
 if (command === "hatch") {
-  hatch();
+  hatch().catch((err) => {
+    console.error(`Error: ${(err as Error).message}`);
+    process.exit(1);
+  });
 } else {
   console.error("Usage: velly hatch");
   process.exit(1);
