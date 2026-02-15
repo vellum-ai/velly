@@ -141,7 +141,11 @@ async function hatch(): Promise<void> {
     });
 
     console.log("Starting gateway...");
-    const logFd = fs.openSync("/var/log/http-gateway.log", "a");
+    const gatewayLogPath = "/var/log/http-gateway.log";
+    if (!fs.existsSync(gatewayLogPath)) {
+      fs.writeFileSync(gatewayLogPath, "");
+    }
+    const logFd = fs.openSync(gatewayLogPath, "a");
     const gatewayChild = spawn("bun", ["run", "src/index.ts"], {
       cwd: gatewayDir,
       detached: true,
