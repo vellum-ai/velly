@@ -139,25 +139,16 @@ async function hatch(): Promise<void> {
       stdio: "inherit",
     });
 
-    const children = [daemonChild, gatewayChild];
-
     const forward = (signal: NodeJS.Signals) => {
-      for (const child of children) child.kill(signal);
+      gatewayChild.kill(signal);
     };
     process.on("SIGINT", () => forward("SIGINT"));
     process.on("SIGTERM", () => forward("SIGTERM"));
 
-    let exited = false;
-    const onExit = (code: number | null) => {
-      if (exited) return;
-      exited = true;
-      for (const child of children) child.kill();
+    gatewayChild.on("exit", (code) => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
       process.exit(code ?? 0);
-    };
-
-    daemonChild.on("exit", onExit);
-    gatewayChild.on("exit", onExit);
+    });
   } catch (err) {
     fs.rmSync(tmpDir, { recursive: true, force: true });
     throw err;
