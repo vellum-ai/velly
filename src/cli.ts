@@ -127,28 +127,26 @@ async function hatch(): Promise<void> {
     ]);
 
     console.log("Starting assistant daemon...");
-    const daemonChild = spawn(
-      "bun",
-      ["run", "src/index.ts", "daemon", "start"],
-      { cwd: assistantDir, stdio: "inherit" }
-    );
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(
+        "bun",
+        ["run", "src/index.ts", "daemon", "start"],
+        { cwd: assistantDir, stdio: "inherit" }
+      );
+      child.on("exit", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`Daemon start exited with code ${code}`));
+      });
+      child.on("error", reject);
+    });
 
     console.log("Starting gateway...");
     const gatewayChild = spawn("bun", ["run", "src/index.ts"], {
       cwd: gatewayDir,
-      stdio: "inherit",
+      detached: true,
+      stdio: "ignore",
     });
-
-    const forward = (signal: NodeJS.Signals) => {
-      gatewayChild.kill(signal);
-    };
-    process.on("SIGINT", () => forward("SIGINT"));
-    process.on("SIGTERM", () => forward("SIGTERM"));
-
-    gatewayChild.on("exit", (code) => {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-      process.exit(code ?? 0);
-    });
+    gatewayChild.unref();
   } catch (err) {
     fs.rmSync(tmpDir, { recursive: true, force: true });
     throw err;
