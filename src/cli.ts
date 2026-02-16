@@ -2,10 +2,10 @@
 
 import { execSync, spawn } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
 const REPO = "vellum-ai/velly";
+const INSTALL_DIR = "/opt/vellum";
 
 interface GitHubAsset {
   name: string;
@@ -106,6 +106,15 @@ async function extractAsset(
   return destDir;
 }
 
+function linkVellumCli(assistantDir: string): void {
+  const bunPath = execSync("which bun", { encoding: "utf-8" }).trim();
+  const entryPoint = path.join(assistantDir, "src", "index.ts");
+  const wrapper = `#!/bin/bash\nexec "${bunPath}" run "${entryPoint}" "$@"\n`;
+  const linkPath = "/usr/local/bin/vellum";
+  fs.writeFileSync(linkPath, wrapper, { mode: 0o755 });
+  console.log(`Linked vellum CLI to ${linkPath}`);
+}
+
 async function hatch(): Promise<void> {
   console.log("Fetching latest release...");
   const release = await fetchLatestRelease();
@@ -113,18 +122,23 @@ async function hatch(): Promise<void> {
   const assistantAsset = findAssetOrThrow(release, "assistant");
   const gatewayAsset = findAssetOrThrow(release, "gateway");
 
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "velly-"));
+  if (fs.existsSync(INSTALL_DIR)) {
+    fs.rmSync(INSTALL_DIR, { recursive: true, force: true });
+  }
+  fs.mkdirSync(INSTALL_DIR, { recursive: true });
 
   try {
     console.log(`Downloading assets from ${release.tag_name}...`);
     const [assistantDir, gatewayDir] = await Promise.all([
       extractAsset(
         assistantAsset.browser_download_url,
-        tmpDir,
+        INSTALL_DIR,
         "assistant"
       ),
-      extractAsset(gatewayAsset.browser_download_url, tmpDir, "gateway"),
+      extractAsset(gatewayAsset.browser_download_url, INSTALL_DIR, "gateway"),
     ]);
+
+    linkVellumCli(assistantDir);
 
     console.log("Starting assistant daemon...");
     await new Promise<void>((resolve, reject) => {
@@ -154,7 +168,7 @@ async function hatch(): Promise<void> {
     gatewayChild.unref();
     fs.closeSync(logFd);
   } catch (err) {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.rmSync(INSTALL_DIR, { recursive: true, force: true });
     throw err;
   }
 }
