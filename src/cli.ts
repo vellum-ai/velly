@@ -106,10 +106,19 @@ async function extractAsset(
   return destDir;
 }
 
-function linkVellumCli(assistantDir: string): void {
+function linkBun(): void {
   const bunPath = execSync("which bun", { encoding: "utf-8" }).trim();
+  const linkPath = "/usr/local/bin/bun";
+  if (bunPath !== linkPath) {
+    fs.copyFileSync(bunPath, linkPath);
+    fs.chmodSync(linkPath, 0o755);
+    console.log(`Linked bun to ${linkPath}`);
+  }
+}
+
+function linkVellumCli(assistantDir: string): void {
   const entryPoint = path.join(assistantDir, "src", "index.ts");
-  const wrapper = `#!/bin/bash\nexec "${bunPath}" run "${entryPoint}" "$@"\n`;
+  const wrapper = `#!/bin/bash\nexec /usr/local/bin/bun run "${entryPoint}" "$@"\n`;
   const linkPath = "/usr/local/bin/vellum";
   fs.writeFileSync(linkPath, wrapper, { mode: 0o755 });
   console.log(`Linked vellum CLI to ${linkPath}`);
@@ -138,6 +147,7 @@ async function hatch(): Promise<void> {
       extractAsset(gatewayAsset.browser_download_url, INSTALL_DIR, "gateway"),
     ]);
 
+    linkBun();
     linkVellumCli(assistantDir);
 
     console.log("Starting assistant daemon...");
