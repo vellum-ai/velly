@@ -155,7 +155,11 @@ async function hatch(): Promise<void> {
       const child = spawn(
         "bun",
         ["run", "src/index.ts", "daemon", "start"],
-        { cwd: assistantDir, stdio: "inherit" }
+        {
+          cwd: assistantDir,
+          stdio: "inherit",
+          env: { ...process.env, RUNTIME_HTTP_PORT: "7821" },
+        }
       );
       child.on("exit", (code) => {
         if (code === 0) resolve();
