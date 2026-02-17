@@ -2,10 +2,24 @@
 
 import { execSync, spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 const REPO = "vellum-ai/velly";
-const INSTALL_DIR = "/opt/vellum";
+
+function getInstallDir(): string {
+  // Try /opt/vellum if we have permission (root or sudo)
+  const systemDir = "/opt/vellum";
+  try {
+    fs.mkdirSync(systemDir, { recursive: true });
+    return systemDir;
+  } catch {
+    // Fall back to user directory if we don't have permission
+    return path.join(os.homedir(), ".local", "share", "vellum");
+  }
+}
+
+const INSTALL_DIR = getInstallDir();
 
 interface GitHubAsset {
   name: string;
@@ -134,7 +148,7 @@ async function hatch(): Promise<void> {
   if (fs.existsSync(INSTALL_DIR)) {
     fs.rmSync(INSTALL_DIR, { recursive: true, force: true });
   }
-  fs.mkdirSync(INSTALL_DIR, { recursive: true });
+  // INSTALL_DIR already created by getInstallDir()
 
   try {
     console.log(`Downloading assets from ${release.tag_name}...`);
