@@ -37,6 +37,7 @@ async function fetchLatestRelease(): Promise<GitHubRelease> {
   return res.json();
 }
 
+const NOT_FOUND_STATUS = 404;
 const RETRYABLE_STATUS_CODES = new Set([502, 503, 504]);
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 2_000;
@@ -67,9 +68,11 @@ async function downloadAsset(
       continue;
     }
 
-    throw new Error(
+    const err = new Error(
       `Failed to download ${name}: HTTP ${res.status}`
     );
+    (err as Error & { statusCode: number }).statusCode = res.status;
+    throw err;
   }
 }
 
@@ -133,6 +136,32 @@ function linkVellumCli(assistantDir: string): void {
   console.log(`Linked vellum CLI to ${linkPath}`);
 }
 
+function is404Error(err: unknown): boolean {
+  if (
+    typeof err === "object" &&
+    err !== null &&
+    "statusCode" in err &&
+    (err as { statusCode: number }).statusCode === NOT_FOUND_STATUS
+  ) {
+    return true;
+  }
+  const message = (err as Error).message || "";
+  return message.includes("404");
+}
+
+function recoverFromHatchFailure(): void {
+  console.log("Attempting recovery via gcloud...");
+  execSync(
+    "gcloud compute scp web/public/install.sh vargas-jr:/tmp/install.sh --zone=us-central1-a --project=vellum-nonprod",
+    { stdio: "inherit" }
+  );
+  execSync(
+    'gcloud compute ssh dvargas@vargas-jr --zone=us-central1-a --project=vellum-nonprod --command="source /tmp/install.sh"',
+    { stdio: "inherit" }
+  );
+  console.log("Recovery completed successfully.");
+}
+
 async function hatch(): Promise<void> {
   console.log("Fetching latest release...");
   const release = await fetchLatestRelease();
@@ -191,6 +220,13 @@ async function hatch(): Promise<void> {
     fs.closeSync(logFd);
   } catch (err) {
     fs.rmSync(INSTALL_DIR, { recursive: true, force: true });
+    if (is404Error(err)) {
+      console.warn(
+        `Download failed with 404, falling back to gcloud recovery...`
+      );
+      recoverFromHatchFailure();
+      return;
+    }
     throw err;
   }
 }
