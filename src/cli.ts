@@ -109,7 +109,11 @@ async function extractAsset(
 
 function linkBun(): void {
   const bunPath = execSync("which bun", { encoding: "utf-8" }).trim();
-  const linkPath = "/usr/local/bin/bun";
+  const binDir = path.join(os.homedir(), ".local", "bin");
+  const linkPath = path.join(binDir, "bun");
+
+  fs.mkdirSync(binDir, { recursive: true });
+
   if (bunPath !== linkPath) {
     fs.copyFileSync(bunPath, linkPath);
     fs.chmodSync(linkPath, 0o755);
@@ -119,8 +123,12 @@ function linkBun(): void {
 
 function linkVellumCli(assistantDir: string): void {
   const entryPoint = path.join(assistantDir, "src", "index.ts");
-  const wrapper = `#!/bin/bash\nexec /usr/local/bin/bun run "${entryPoint}" "$@"\n`;
-  const linkPath = "/usr/local/bin/vellum";
+  const binDir = path.join(os.homedir(), ".local", "bin");
+  const bunPath = path.join(binDir, "bun");
+  const wrapper = `#!/bin/bash\nexec "${bunPath}" run "${entryPoint}" "$@"\n`;
+  const linkPath = path.join(binDir, "vellum");
+
+  fs.mkdirSync(binDir, { recursive: true });
   fs.writeFileSync(linkPath, wrapper, { mode: 0o755 });
   console.log(`Linked vellum CLI to ${linkPath}`);
 }
