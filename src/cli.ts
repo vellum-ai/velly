@@ -178,10 +178,9 @@ async function hatch(): Promise<void> {
     });
 
     console.log("Starting gateway...");
-    const gatewayLogPath = "/var/log/http-gateway.log";
-    if (!fs.existsSync(gatewayLogPath)) {
-      fs.writeFileSync(gatewayLogPath, "");
-    }
+    const vellumDir = path.join(os.homedir(), ".vellum");
+    fs.mkdirSync(vellumDir, { recursive: true });
+    const gatewayLogPath = path.join(vellumDir, "http-gateway.log");
     const logFd = fs.openSync(gatewayLogPath, "a");
     const gatewayChild = spawn("bun", ["run", "src/index.ts"], {
       cwd: gatewayDir,
