@@ -2,10 +2,11 @@
 
 import { execSync, spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 const REPO = "vellum-ai/velly";
-const INSTALL_DIR = "/opt/vellum";
+const INSTALL_DIR = path.join(os.homedir(), ".local", "share", "vellum");
 
 interface GitHubAsset {
   name: string;
