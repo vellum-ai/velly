@@ -149,6 +149,7 @@ async function hatch(): Promise<void> {
   const release = await fetchLatestRelease();
 
   const assistantAsset = findAssetOrThrow(release, "assistant");
+  const cliAsset = findAssetOrThrow(release, "cli");
   const gatewayAsset = findAssetOrThrow(release, "gateway");
 
   if (fs.existsSync(INSTALL_DIR)) {
@@ -158,12 +159,13 @@ async function hatch(): Promise<void> {
 
   try {
     console.log(`Downloading assets from ${release.tag_name}...`);
-    const [assistantDir, gatewayDir] = await Promise.all([
+    const [assistantDir, , gatewayDir] = await Promise.all([
       extractAsset(
         assistantAsset.browser_download_url,
         INSTALL_DIR,
         "assistant"
       ),
+      extractAsset(cliAsset.browser_download_url, INSTALL_DIR, "cli"),
       extractAsset(gatewayAsset.browser_download_url, INSTALL_DIR, "gateway"),
     ]);
 
