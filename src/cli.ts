@@ -218,6 +218,6 @@ if (command === "hatch") {
     process.exit(1);
   });
 } else {
-  console.error("Usage: velly hatch");
+  console.error("Usage: vellum hatch");
   process.exit(1);
 }

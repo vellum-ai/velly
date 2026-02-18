@@ -1,10 +1,10 @@
 {
-  "name": "velly",
+  "name": "vellum",
   "version": "0.0.16",
   "description": "",
   "main": "dist/cli.js",
   "bin": {
-    "velly": "dist/cli.js"
+    "vellum": "dist/cli.js"
   },
   "files": [
     "dist"
