@@ -7,6 +7,26 @@ import path from "node:path";
 
 const REPO = "vellum-ai/velly";
 const INSTALL_DIR = path.join(os.homedir(), ".local", "share", "vellum");
+const DOTENV_PATH = path.join(os.homedir(), ".vellum", ".env");
+
+function loadDotenv(): Record<string, string> {
+  const vars: Record<string, string> = {};
+  try {
+    const content = fs.readFileSync(DOTENV_PATH, "utf-8");
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eqIdx = trimmed.indexOf("=");
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      const value = trimmed.slice(eqIdx + 1).trim();
+      if (key) vars[key] = value;
+    }
+  } catch {
+    // .env file may not exist
+  }
+  return vars;
+}
 
 interface GitHubAsset {
   name: string;
@@ -180,12 +200,14 @@ async function hatch(): Promise<void> {
     console.log("Starting gateway...");
     const vellumDir = path.join(os.homedir(), ".vellum");
     fs.mkdirSync(vellumDir, { recursive: true });
+    const dotenvVars = loadDotenv();
     const gatewayLogPath = path.join(vellumDir, "http-gateway.log");
     const logFd = fs.openSync(gatewayLogPath, "a");
     const gatewayChild = spawn("bun", ["run", "src/index.ts"], {
       cwd: gatewayDir,
       detached: true,
       stdio: ["ignore", logFd, logFd],
+      env: { ...process.env, ...dotenvVars },
     });
     gatewayChild.unref();
     fs.closeSync(logFd);
