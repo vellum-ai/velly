@@ -1,12 +1,23 @@
 #!/usr/bin/env bun
 
 import { execSync, spawn } from "node:child_process";
+import dotenv from "dotenv";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 const REPO = "vellum-ai/velly";
 const INSTALL_DIR = path.join(os.homedir(), ".local", "share", "vellum");
+const DOTENV_PATH = path.join(os.homedir(), ".vellum", ".env");
+
+function loadDotenv(): Record<string, string> {
+  try {
+    const parsed = dotenv.parse(fs.readFileSync(DOTENV_PATH, "utf-8"));
+    return parsed;
+  } catch {
+    return {};
+  }
+}
 
 interface GitHubAsset {
   name: string;
@@ -180,12 +191,14 @@ async function hatch(): Promise<void> {
     console.log("Starting gateway...");
     const vellumDir = path.join(os.homedir(), ".vellum");
     fs.mkdirSync(vellumDir, { recursive: true });
+    const dotenvVars = loadDotenv();
     const gatewayLogPath = path.join(vellumDir, "http-gateway.log");
     const logFd = fs.openSync(gatewayLogPath, "a");
     const gatewayChild = spawn("bun", ["run", "src/index.ts"], {
       cwd: gatewayDir,
       detached: true,
       stdio: ["ignore", logFd, logFd],
+      env: { ...process.env, ...dotenvVars },
     });
     gatewayChild.unref();
     fs.closeSync(logFd);

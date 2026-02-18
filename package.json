@@ -1,6 +1,6 @@
 {
   "name": "velly",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "description": "",
   "main": "dist/cli.js",
   "bin": {
@@ -12,5 +12,8 @@
   "scripts": {
     "build": "bun build src/cli.ts --outfile dist/cli.js --target bun"
   },
-  "license": "GPL-3.0"
+  "license": "GPL-3.0",
+  "dependencies": {
+    "dotenv": "^17.3.1"
+  }
 }
