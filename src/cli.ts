@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { execSync, spawn } from "node:child_process";
+import dotenv from "dotenv";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -10,22 +11,12 @@ const INSTALL_DIR = path.join(os.homedir(), ".local", "share", "vellum");
 const DOTENV_PATH = path.join(os.homedir(), ".vellum", ".env");
 
 function loadDotenv(): Record<string, string> {
-  const vars: Record<string, string> = {};
   try {
-    const content = fs.readFileSync(DOTENV_PATH, "utf-8");
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const eqIdx = trimmed.indexOf("=");
-      if (eqIdx === -1) continue;
-      const key = trimmed.slice(0, eqIdx).trim();
-      const value = trimmed.slice(eqIdx + 1).trim();
-      if (key) vars[key] = value;
-    }
+    const parsed = dotenv.parse(fs.readFileSync(DOTENV_PATH, "utf-8"));
+    return parsed;
   } catch {
-    // .env file may not exist
+    return {};
   }
-  return vars;
 }
 
 interface GitHubAsset {
